@@ -125,7 +125,7 @@ func TestTemplateEngineRender(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    map[string]interface{}
+		want    []map[string]interface{}
 		wantErr bool
 	}{
 		{
@@ -146,7 +146,7 @@ func TestTemplateEngineRender(t *testing.T) {
 				templateStr:  GetMockAgentClusterInstallTemplate(),
 				data:         TestData,
 			},
-			want: map[string]interface{}{
+			want: []map[string]interface{}{{
 				"apiVersion": "extensions.hive.openshift.io/v1beta1",
 				"kind":       "AgentClusterInstall",
 				"metadata": map[string]interface{}{
@@ -168,7 +168,7 @@ func TestTemplateEngineRender(t *testing.T) {
 						"machineNetwork": []interface{}{map[string]interface{}{"cidr": "203.0.113.0/24"}},
 						"serviceNetwork": []interface{}{"203.0.113.0/24"}},
 					"provisionRequirements": map[string]interface{}{"controlPlaneAgents": 1, "workerAgents": 0, "arbiterAgents": 0},
-					"sshPublicKey":          "ssh-rsa"}},
+					"sshPublicKey":          "ssh-rsa"}}},
 			wantErr: false,
 		},
 
@@ -179,7 +179,7 @@ func TestTemplateEngineRender(t *testing.T) {
 				templateStr:  GetMockNMStateConfigTemplate(),
 				data:         TestData,
 			},
-			want: map[string]interface{}{
+			want: []map[string]interface{}{{
 				"apiVersion": "agent-install.openshift.io/v1beta1",
 				"kind":       "NMStateConfig",
 				"metadata": map[string]interface{}{
@@ -192,7 +192,7 @@ func TestTemplateEngineRender(t *testing.T) {
 					"config":     NetConfig.Config,
 					"interfaces": NetConfig.GetInterfaces(),
 				},
-			},
+			}},
 			wantErr: false,
 		},
 
@@ -203,7 +203,7 @@ func TestTemplateEngineRender(t *testing.T) {
 				templateStr:  GetMockImageClusterInstallTemplate(),
 				data:         TestData,
 			},
-			want: map[string]interface{}{
+			want: []map[string]interface{}{{
 				"apiVersion": "extensions.hive.openshift.io/v1alpha1",
 				"kind":       "ImageClusterInstall",
 				"metadata": map[string]interface{}{
@@ -229,7 +229,7 @@ func TestTemplateEngineRender(t *testing.T) {
 					"machineNetwork":   "203.0.113.0/24",
 					"bareMetalHostRef": map[string]interface{}{"name": "node1", "namespace": "site-sno-du-1"},
 					"sshKey":           "ssh-rsa",
-				}},
+				}}},
 			wantErr: false,
 		},
 
@@ -253,7 +253,7 @@ metadata:
 `,
 				data: TestData,
 			},
-			want: map[string]interface{}{
+			want: []map[string]interface{}{{
 				"apiVersion": "metal3.io/v1alpha1",
 				"kind":       "BareMetalHost",
 				"metadata": map[string]interface{}{
@@ -267,7 +267,7 @@ metadata:
 					"name":      "node1",
 					"namespace": "site-sno-du-1",
 				},
-			},
+			}},
 			wantErr: false,
 		},
 
@@ -278,7 +278,7 @@ metadata:
 				templateStr:  GetMockNodePoolTemplate(),
 				data:         TestData,
 			},
-			want: map[string]interface{}{
+			want: []map[string]interface{}{{
 				"apiVersion": "hypershift.openshift.io/v1beta1",
 				"kind":       "NodePool",
 				"metadata": map[string]interface{}{
@@ -293,6 +293,75 @@ metadata:
 					"replicas":    1,
 					"release": map[string]interface{}{
 						"image": "test-image",
+					},
+				},
+			}},
+			wantErr: false,
+		},
+
+		{
+			name: "Test with multi-document YAML template",
+			args: args{
+				templateType: "MultiDoc",
+				templateStr: `---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ .Spec.ClusterName }}-config1"
+  namespace: "{{ .Spec.ClusterName }}"
+data:
+  key1: value1
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ .Spec.ClusterName }}-config2"
+  namespace: "{{ .Spec.ClusterName }}"
+data:
+  key2: value2
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: "{{ .Spec.ClusterName }}-secret"
+  namespace: "{{ .Spec.ClusterName }}"
+stringData:
+  password: "secret123"
+`,
+				data: TestData,
+			},
+			want: []map[string]interface{}{
+				{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "site-sno-du-1-config1",
+						"namespace": "site-sno-du-1",
+					},
+					"data": map[string]interface{}{
+						"key1": "value1",
+					},
+				},
+				{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "site-sno-du-1-config2",
+						"namespace": "site-sno-du-1",
+					},
+					"data": map[string]interface{}{
+						"key2": "value2",
+					},
+				},
+				{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name":      "site-sno-du-1-secret",
+						"namespace": "site-sno-du-1",
+					},
+					"stringData": map[string]interface{}{
+						"password": "secret123",
 					},
 				},
 			},
