@@ -22,6 +22,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/go-logr/logr"
+	bmh_v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -1426,5 +1427,353 @@ var _ = Describe("determineSpecChangePermission", func() {
 			result := determineSpecChangePermission(oldClusterInstance, newClusterInstance)
 			Expect(result).To(Equal(SpecChangeBlocked))
 		})
+	})
+})
+
+var _ = Describe("validateHostNetworkAttachments", func() {
+	var clusterInstance *ClusterInstance
+
+	BeforeEach(func() {
+		clusterInstance = &ClusterInstance{
+			Spec: ClusterInstanceSpec{
+				TemplateRefs: []TemplateRef{
+					{Name: "cluster-template", Namespace: "default"},
+				},
+				Nodes: []NodeSpec{
+					{
+						HostName: "node1",
+						Role:     "master",
+						TemplateRefs: []TemplateRef{
+							{Name: "node-template", Namespace: "default"},
+						},
+					},
+				},
+			},
+		}
+	})
+
+	It("should pass validation when HostNetworkAttachments is nil", func() {
+		clusterInstance.Spec.HostNetworkAttachments = nil
+		err := validateHostNetworkAttachments(clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should pass validation with valid HostNetworkAttachments", func() {
+		clusterInstance.Spec.HostNetworkAttachments = []HostNetworkAttachmentTemplate{
+			{
+				Name: "storage-net",
+				Spec: bmh_v1alpha1.HostNetworkAttachmentSpec{
+					Mode:       bmh_v1alpha1.SwitchportModeAccess,
+					NativeVLAN: 100,
+				},
+			},
+			{
+				Name: "tenant-net",
+				Spec: bmh_v1alpha1.HostNetworkAttachmentSpec{
+					Mode:       bmh_v1alpha1.SwitchportModeTrunk,
+					NativeVLAN: 200,
+				},
+			},
+		}
+		err := validateHostNetworkAttachments(clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should fail validation when HostNetworkAttachment name is empty", func() {
+		clusterInstance.Spec.HostNetworkAttachments = []HostNetworkAttachmentTemplate{
+			{
+				Name: "",
+				Spec: bmh_v1alpha1.HostNetworkAttachmentSpec{
+					Mode:       bmh_v1alpha1.SwitchportModeAccess,
+					NativeVLAN: 100,
+				},
+			},
+		}
+		err := validateHostNetworkAttachments(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
+	})
+
+	It("should fail validation when HostNetworkAttachment names are duplicated", func() {
+		clusterInstance.Spec.HostNetworkAttachments = []HostNetworkAttachmentTemplate{
+			{
+				Name: "storage-net",
+				Spec: bmh_v1alpha1.HostNetworkAttachmentSpec{
+					Mode:       bmh_v1alpha1.SwitchportModeAccess,
+					NativeVLAN: 100,
+				},
+			},
+			{
+				Name: "storage-net",
+				Spec: bmh_v1alpha1.HostNetworkAttachmentSpec{
+					Mode:       bmh_v1alpha1.SwitchportModeTrunk,
+					NativeVLAN: 200,
+				},
+			},
+		}
+		err := validateHostNetworkAttachments(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("duplicate name"))
+		Expect(err.Error()).To(ContainSubstring("storage-net"))
+	})
+
+	It("should fail validation with multiple empty names", func() {
+		clusterInstance.Spec.HostNetworkAttachments = []HostNetworkAttachmentTemplate{
+			{
+				Name: "valid-name",
+				Spec: bmh_v1alpha1.HostNetworkAttachmentSpec{
+					Mode:       bmh_v1alpha1.SwitchportModeAccess,
+					NativeVLAN: 100,
+				},
+			},
+			{
+				Name: "",
+				Spec: bmh_v1alpha1.HostNetworkAttachmentSpec{
+					Mode:       bmh_v1alpha1.SwitchportModeTrunk,
+					NativeVLAN: 200,
+				},
+			},
+		}
+		err := validateHostNetworkAttachments(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
+	})
+})
+
+var _ = Describe("validateNetworkAttachments", func() {
+	var clusterInstance *ClusterInstance
+
+	BeforeEach(func() {
+		clusterInstance = &ClusterInstance{
+			Spec: ClusterInstanceSpec{
+				TemplateRefs: []TemplateRef{
+					{Name: "cluster-template", Namespace: "default"},
+				},
+				HostNetworkAttachments: []HostNetworkAttachmentTemplate{
+					{
+						Name: "storage-net",
+						Spec: bmh_v1alpha1.HostNetworkAttachmentSpec{
+							Mode:       bmh_v1alpha1.SwitchportModeAccess,
+							NativeVLAN: 100,
+						},
+					},
+					{
+						Name: "tenant-net",
+						Spec: bmh_v1alpha1.HostNetworkAttachmentSpec{
+							Mode:       bmh_v1alpha1.SwitchportModeTrunk,
+							NativeVLAN: 200,
+						},
+					},
+				},
+				Nodes: []NodeSpec{
+					{
+						HostName: "node1",
+						Role:     "master",
+						TemplateRefs: []TemplateRef{
+							{Name: "node-template", Namespace: "default"},
+						},
+					},
+				},
+			},
+		}
+	})
+
+	It("should pass validation when HostNetworkAttachments is nil", func() {
+		clusterInstance.Spec.HostNetworkAttachments = nil
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should pass validation when node has no NetworkAttachments", func() {
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = nil
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should pass validation with valid NetworkAttachments using interface name", func() {
+		ifName := "eno1"
+		netAttachments := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{Name: &ifName},
+				HostNetworkAttachmentName: "storage-net",
+			},
+		}
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = &netAttachments
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should pass validation with valid NetworkAttachments using MAC address", func() {
+		macAddr := "00:11:22:33:44:55"
+		netAttachments := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{MACAddress: &macAddr},
+				HostNetworkAttachmentName: "tenant-net",
+			},
+		}
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = &netAttachments
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should fail validation when interfaceRef has neither name nor macAddress", func() {
+		netAttachments := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{},
+				HostNetworkAttachmentName: "storage-net",
+			},
+		}
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = &netAttachments
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("interfaceRef must specify either name or macAddress"))
+	})
+
+	It("should fail validation when interfaceRef has both name and macAddress", func() {
+		ifName := "eno1"
+		macAddr := "00:11:22:33:44:55"
+		netAttachments := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{Name: &ifName, MACAddress: &macAddr},
+				HostNetworkAttachmentName: "storage-net",
+			},
+		}
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = &netAttachments
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("interfaceRef cannot specify both name and macAddress"))
+	})
+
+	It("should fail validation when interfaceRef has empty name", func() {
+		emptyName := ""
+		netAttachments := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{Name: &emptyName},
+				HostNetworkAttachmentName: "storage-net",
+			},
+		}
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = &netAttachments
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("interfaceRef must specify either name or macAddress"))
+	})
+
+	It("should fail validation when interfaceRef has empty macAddress", func() {
+		emptyMAC := ""
+		netAttachments := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{MACAddress: &emptyMAC},
+				HostNetworkAttachmentName: "storage-net",
+			},
+		}
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = &netAttachments
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("interfaceRef must specify either name or macAddress"))
+	})
+
+	It("should fail validation when HostNetworkAttachmentName is empty", func() {
+		ifName := "eno1"
+		netAttachments := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{Name: &ifName},
+				HostNetworkAttachmentName: "",
+			},
+		}
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = &netAttachments
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("hostNetworkAttachmentName cannot be empty"))
+	})
+
+	It("should fail validation when HostNetworkAttachment reference does not exist", func() {
+		ifName := "eno1"
+		netAttachments := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{Name: &ifName},
+				HostNetworkAttachmentName: "non-existent-net",
+			},
+		}
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = &netAttachments
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not found in spec.hostNetworkAttachments"))
+		Expect(err.Error()).To(ContainSubstring("non-existent-net"))
+	})
+
+	It("should validate multiple nodes with NetworkAttachments", func() {
+		ifName1 := "eno1"
+		ifName2 := "eno2"
+		netAttachments1 := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{Name: &ifName1},
+				HostNetworkAttachmentName: "storage-net",
+			},
+		}
+		netAttachments2 := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{Name: &ifName2},
+				HostNetworkAttachmentName: "tenant-net",
+			},
+		}
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = &netAttachments1
+		clusterInstance.Spec.Nodes = append(clusterInstance.Spec.Nodes, NodeSpec{
+			HostName:               "node2",
+			Role:                   "worker",
+			HostNetworkAttachments: &netAttachments2,
+			TemplateRefs: []TemplateRef{
+				{Name: "node-template", Namespace: "default"},
+			},
+		})
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should fail validation for second node with invalid reference", func() {
+		ifName1 := "eno1"
+		ifName2 := "eno2"
+		netAttachments1 := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{Name: &ifName1},
+				HostNetworkAttachmentName: "storage-net",
+			},
+		}
+		netAttachments2 := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{Name: &ifName2},
+				HostNetworkAttachmentName: "invalid-net",
+			},
+		}
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = &netAttachments1
+		clusterInstance.Spec.Nodes = append(clusterInstance.Spec.Nodes, NodeSpec{
+			HostName:               "node2",
+			Role:                   "worker",
+			HostNetworkAttachments: &netAttachments2,
+			TemplateRefs: []TemplateRef{
+				{Name: "node-template", Namespace: "default"},
+			},
+		})
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("nodes[1]"))
+		Expect(err.Error()).To(ContainSubstring("invalid-net"))
+	})
+
+	It("should validate multiple NetworkAttachments on same node", func() {
+		ifName1 := "eno1"
+		macAddr := "00:11:22:33:44:55"
+		netAttachments := []HostNetworkAttachment{
+			{
+				InterfaceRef:             InterfaceRef{Name: &ifName1},
+				HostNetworkAttachmentName: "storage-net",
+			},
+			{
+				InterfaceRef:             InterfaceRef{MACAddress: &macAddr},
+				HostNetworkAttachmentName: "tenant-net",
+			},
+		}
+		clusterInstance.Spec.Nodes[0].HostNetworkAttachments = &netAttachments
+		err := validateNetworkAttachments(clusterInstance)
+		Expect(err).ToNot(HaveOccurred())
 	})
 })

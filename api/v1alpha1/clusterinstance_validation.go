@@ -196,6 +196,16 @@ func ValidateClusterInstance(clusterInstance *ClusterInstance) error {
 		return fmt.Errorf("control-plane agent validation failed: %w", err)
 	}
 
+	// Validate HostNetworkAttachments.
+	if err := validateHostNetworkAttachments(clusterInstance); err != nil {
+		return fmt.Errorf("host network attachment validation failed: %w", err)
+	}
+
+	// Validate NetworkAttachments.
+	if err := validateNetworkAttachments(clusterInstance); err != nil {
+		return fmt.Errorf("network attachment validation failed: %w", err)
+	}
+
 	return nil
 }
 
@@ -962,4 +972,82 @@ func getReinstallPermissibleFields() []string {
 // getReinstallNodePaths returns JSON paths from ReinstallPermissions
 func getReinstallNodePaths() []string {
 	return slices.Collect(maps.Values(ReinstallPermissions))
+}
+
+// validateHostNetworkAttachments validates HostNetworkAttachment definitions in the cluster spec
+func validateHostNetworkAttachments(clusterInstance *ClusterInstance) error {
+	if len(clusterInstance.Spec.HostNetworkAttachments) == 0 {
+		return nil
+	}
+
+	names := make(map[string]bool)
+	for idx, hna := range clusterInstance.Spec.HostNetworkAttachments {
+		// Validate name is not empty
+		if hna.Name == "" {
+			return fmt.Errorf("hostNetworkAttachments[%d]: name cannot be empty", idx)
+		}
+
+		// Check for duplicate names
+		if names[hna.Name] {
+			return fmt.Errorf("hostNetworkAttachments[%d]: duplicate name %q", idx, hna.Name)
+		}
+		names[hna.Name] = true
+	}
+
+	return nil
+}
+
+// validateNetworkAttachments validates HostNetworkAttachment references in node specs
+func validateNetworkAttachments(clusterInstance *ClusterInstance) error {
+	if len(clusterInstance.Spec.HostNetworkAttachments) == 0 {
+		return nil
+	}
+
+	// Build map of valid attachment names
+	validAttachments := make(map[string]bool)
+	for _, hna := range clusterInstance.Spec.HostNetworkAttachments {
+		validAttachments[hna.Name] = true
+	}
+
+	// Validate each node's network attachments
+	for nodeIdx, node := range clusterInstance.Spec.Nodes {
+		if node.HostNetworkAttachments == nil {
+			continue
+		}
+
+		for attachIdx, na := range *node.HostNetworkAttachments {
+			// Validate InterfaceRef has either Name or MACAddress (but not both)
+			hasName := na.InterfaceRef.Name != nil && *na.InterfaceRef.Name != ""
+			hasMAC := na.InterfaceRef.MACAddress != nil && *na.InterfaceRef.MACAddress != ""
+
+			if !hasName && !hasMAC {
+				return fmt.Errorf(
+					"nodes[%d].hostNetworkAttachments[%d]: interfaceRef must specify either name or macAddress",
+					nodeIdx, attachIdx)
+			}
+
+			if hasName && hasMAC {
+				return fmt.Errorf(
+					"nodes[%d].hostNetworkAttachments[%d]: interfaceRef cannot specify both name and macAddress",
+					nodeIdx, attachIdx)
+			}
+
+			// Validate HostNetworkAttachmentName
+			refName := na.HostNetworkAttachmentName
+			if refName == "" {
+				return fmt.Errorf(
+					"nodes[%d].hostNetworkAttachments[%d]: hostNetworkAttachmentName cannot be empty",
+					nodeIdx, attachIdx)
+			}
+
+			// Validate reference exists in cluster-level HostNetworkAttachments
+			if !validAttachments[refName] {
+				return fmt.Errorf(
+					"nodes[%d].hostNetworkAttachments[%d]: hostNetworkAttachment %q not found in spec.hostNetworkAttachments",
+					nodeIdx, attachIdx, refName)
+			}
+		}
+	}
+
+	return nil
 }

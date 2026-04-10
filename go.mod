@@ -149,6 +149,8 @@ require (
 )
 
 replace (
+	#github.com/metal3-io/baremetal-operator/apis => /home/alegacy/src/go/github.com/baremetal-operator/apis
 	github.com/openshift/assisted-service/api => github.com/openshift/assisted-service/api v0.0.0-20260730005937-1b0090e2c563 // release-ocm-2.17
 	github.com/openshift/assisted-service/models => github.com/openshift/assisted-service/models v0.0.0-20260730005937-1b0090e2c563 // release-ocm-2.17
+	github.com/openshift/baremetal-operator/apis => github.com/alegacy/baremetal-operator/apis v0.0.0-20260729202025-88c0f6b8a9b1
 )

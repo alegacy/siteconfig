@@ -1295,6 +1295,18 @@ spec:
           - patch
           - update
         - apiGroups:
+          - metal3.io
+          resources:
+          - hostnetworkattachments
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
           - register.open-cluster-management.io
           resources:
           - managedclusters/accept
@@ -1496,8 +1508,7 @@ spec:
   webhookdefinitions:
   - admissionReviewVersions:
     - v1
-    containerPort: 443
-    deploymentName: siteconfig-controller-manager
+    deploymentName: webhook
     failurePolicy: Fail
     generateName: clusterinstances.siteconfig.open-cluster-management.io
     rules:
@@ -1512,6 +1523,5 @@ spec:
       resources:
       - clusterinstances
     sideEffects: None
-    targetPort: 9443
     type: ValidatingAdmissionWebhook
     webhookPath: /validate-siteconfig-open-cluster-management-io-v1alpha1-clusterinstance

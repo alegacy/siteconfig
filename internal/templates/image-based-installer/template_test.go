@@ -45,6 +45,7 @@ var _ = Describe("Get Installation Templates", func() {
 			"ClusterDeployment":     ClusterDeployment,
 			"ManagedCluster":        ManagedCluster,
 			"KlusterletAddonConfig": KlusterletAddonConfig,
+			"HostNetworkAttachment": HostNetworkAttachment,
 		}
 		Expect(clusterTemplates).To(Equal(expectedCRs))
 	})

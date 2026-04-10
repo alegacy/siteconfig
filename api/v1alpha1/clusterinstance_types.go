@@ -155,6 +155,35 @@ type ResourceRef struct {
 	Kind string `json:"kind"`
 }
 
+// HostNetworkAttachmentTemplate defines a template for rendering a HostNetworkAttachment CR.
+// It wraps the BMO HostNetworkAttachmentSpec and adds a name for rendering purposes.
+type HostNetworkAttachmentTemplate struct {
+	// Name is the unique identifier for this network attachment configuration within the cluster namespace.
+	// This will be used as metadata.name when rendering the HostNetworkAttachment CR.
+	// +required
+	Name string `json:"name"`
+
+	// Spec contains the HostNetworkAttachment specification from baremetal-operator.
+	// +required
+	Spec bmh_v1alpha1.HostNetworkAttachmentSpec `json:"spec"`
+}
+
+// InterfaceRef is a reference to a network interface on a BareMetalHost.  The reference should one of either the name
+// or MAC address of the interface.  Note: Validation of this reference cannot be done until the BareMetalHost has been
+// inspected by the Metal3 layer.
+type InterfaceRef struct {
+	// Name is the name of a network interface.
+	Name *string `json:"name,omitempty"`
+	// MacAddress is the MAC address of a network interface.
+	MACAddress *string `json:"macAddress,omitempty"`
+}
+
+// HostNetworkAttachment defines a reference pair to both a network interface and a network attachment.
+type HostNetworkAttachment struct {
+	InterfaceRef              InterfaceRef `json:"interfaceRef"`
+	HostNetworkAttachmentName string       `json:"hostNetworkAttachmentName"`
+}
+
 // NodeSpec defines the desired configuration for a single node (host) in
 // a ClusterInstance, including bare-metal host details, network settings,
 // and node-level template overrides.
@@ -202,6 +231,10 @@ type NodeSpec struct {
 	// need for additional reboots after the installation is complete.
 	// +optional
 	NodeLabels map[string]string `json:"nodeLabels,omitempty"`
+
+	// HostNetworkAttachments defines the list of associations between network interfaces to network attachments.
+	// +optional
+	HostNetworkAttachments *[]HostNetworkAttachment `json:"hostNetworkAttachments,omitempty"`
 
 	// Hostname is the desired hostname for the host
 	// +required
@@ -531,6 +564,11 @@ type ClusterInstanceSpec struct {
 	// applicable to the Assisted Installer flow.
 	// +optional
 	CaBundleRef *corev1.LocalObjectReference `json:"caBundleRef,omitempty"`
+
+	// HostNetworkAttachments is a list of network attachments that must be rendered for the cluster.  These are
+	// referenced by BMH instances to define which network attachment must be associated to each network interface.
+	// +optional
+	HostNetworkAttachments []HostNetworkAttachmentTemplate `json:"hostNetworkAttachments,omitempty"`
 
 	// nodes is the list of nodes to provision for this cluster. The number
 	// and roles of nodes must be compatible with the selected clusterType.

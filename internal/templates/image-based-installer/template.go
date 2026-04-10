@@ -171,6 +171,21 @@ spec:
 {{ else }}
   preprovisioningNetworkDataName: {{ .SpecialVars.CurrentNode.HostName }}
 {{ end }}
+{{ end }}
+{{ if .SpecialVars.CurrentNode.HostNetworkAttachments }}
+  networkInterfaces:
+{{ range .SpecialVars.CurrentNode.HostNetworkAttachments }}
+{{ if .InterfaceRef.Name }}
+  - name: "{{ .InterfaceRef.Name }}"
+{{ else }}
+{{ if .InterfaceRef.MACAddress }}
+  - macAddress: "{{ .InterfaceRef.MACAddress }}"
+{{ end }}
+{{ end }}
+    hostNetworkAttachment:
+      namespace: "{{ $.Spec.ClusterName }}"
+      name: "{{ .HostNetworkAttachmentName }}"
+{{ end }}
 {{ end }}`
 
 // nolint:gosec
@@ -194,11 +209,35 @@ data:
 {{ .SpecialVars.CurrentNode.NodeNetwork.NetConfig | toYaml | b64enc | indent 4}}
 {{ end }}`
 
+const HostNetworkAttachment = `{{ if .Spec.HostNetworkAttachments }}
+{{ range .Spec.HostNetworkAttachments }}
+---
+apiVersion: metal3.io/v1alpha1
+kind: HostNetworkAttachment
+metadata:
+  name: "{{ .Name }}"
+  namespace: "{{ $.Spec.ClusterName }}"
+  annotations:
+    siteconfig.open-cluster-management.io/sync-wave: "1"
+spec:
+  mode: "{{ .Spec.Mode }}"
+  nativeVLAN: {{ .Spec.NativeVLAN }}
+{{ if .Spec.AllowedVLANs }}
+  allowedVLANs:
+{{ .Spec.AllowedVLANs | toYaml | indent 4 }}
+{{ end }}
+{{ if .Spec.MTU }}
+  mtu: {{ .Spec.MTU }}
+{{ end }}
+{{ end }}
+{{ end }}`
+
 func GetClusterTemplates() map[string]string {
 	data := make(map[string]string)
 	data["ClusterDeployment"] = ClusterDeployment
 	data["ManagedCluster"] = ManagedCluster
 	data["KlusterletAddonConfig"] = KlusterletAddonConfig
+	data["HostNetworkAttachment"] = HostNetworkAttachment
 	return data
 }
 

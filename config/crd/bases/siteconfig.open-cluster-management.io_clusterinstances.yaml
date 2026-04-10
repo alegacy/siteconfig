@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.0
+    controller-gen.kubebuilder.io/version: v0.16.2
   name: clusterinstances.siteconfig.open-cluster-management.io
 spec:
   group: siteconfig.open-cluster-management.io
@@ -257,6 +257,69 @@ spec:
                   normally, but installation is held until this field is set to false.
                   Can only be enabled at creation time. Defaults to false.
                 type: boolean
+              hostNetworkAttachments:
+                description: |-
+                  HostNetworkAttachments is a list of network attachments that must be rendered for the cluster.  These are
+                  referenced by BMH instances to define which network attachment must be associated to each network interface.
+                items:
+                  description: |-
+                    HostNetworkAttachmentTemplate defines a template for rendering a HostNetworkAttachment CR.
+                    It wraps the BMO HostNetworkAttachmentSpec and adds a name for rendering purposes.
+                  properties:
+                    name:
+                      description: |-
+                        Name is the unique identifier for this network attachment configuration within the cluster namespace.
+                        This will be used as metadata.name when rendering the HostNetworkAttachment CR.
+                      type: string
+                    spec:
+                      description: Spec contains the HostNetworkAttachment specification
+                        from baremetal-operator.
+                      properties:
+                        allowedVLANs:
+                          description: |-
+                            AllowedVLANs specifies a list of VLAN IDs that are allowed on this network attachment.
+                            This is typically used in trunk or hybrid mode to specify which tagged VLANs can be carried on the interface.
+                          items:
+                            maximum: 4094
+                            minimum: 1
+                            type: integer
+                          type: array
+                        mode:
+                          allOf:
+                          - enum:
+                            - access
+                            - trunk
+                            - hybrid
+                          - enum:
+                            - access
+                            - hybrid
+                            - trunk
+                          default: access
+                          description: Mode specifies the network attachment mode.
+                          type: string
+                        mtu:
+                          description: |-
+                            MTU specifies the Maximum Transmission Unit size for the network attachment.
+                            If not specified, the default MTU for the underlying network will be used.
+                          maximum: 9216
+                          minimum: 68
+                          type: integer
+                        nativeVLAN:
+                          description: |-
+                            NativeVLAN specifies the native VLAN ID for the network attachment.
+                            This is the untagged VLAN used on the interface.
+                          maximum: 4094
+                          minimum: 1
+                          type: integer
+                      required:
+                      - mode
+                      - nativeVLAN
+                      type: object
+                  required:
+                  - name
+                  - spec
+                  type: object
+                type: array
               ignitionConfigOverride:
                 description: |-
                   ignitionConfigOverride is a JSON-formatted string containing overrides
@@ -403,6 +466,34 @@ spec:
                     hostName:
                       description: Hostname is the desired hostname for the host
                       type: string
+                    hostNetworkAttachments:
+                      description: HostNetworkAttachments defines the list of associations
+                        between network interfaces to network attachments.
+                      items:
+                        description: HostNetworkAttachment defines a reference pair
+                          to both a network interface and a network attachment.
+                        properties:
+                          hostNetworkAttachmentName:
+                            type: string
+                          interfaceRef:
+                            description: |-
+                              InterfaceRef is a reference to a network interface on a BareMetalHost.  The reference should one of either the name
+                              or MAC address of the interface.  Note: Validation of this reference cannot be done until the BareMetalHost has been
+                              inspected by the Metal3 layer.
+                            properties:
+                              macAddress:
+                                description: MacAddress is the MAC address of a network
+                                  interface.
+                                type: string
+                              name:
+                                description: Name is the name of a network interface.
+                                type: string
+                            type: object
+                        required:
+                        - hostNetworkAttachmentName
+                        - interfaceRef
+                        type: object
+                      type: array
                     hostRef:
                       description: HostRef is used to specify a reference to a BareMetalHost
                         resource.
